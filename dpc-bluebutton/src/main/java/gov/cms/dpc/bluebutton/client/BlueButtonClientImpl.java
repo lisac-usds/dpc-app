@@ -5,6 +5,8 @@ import ca.uhn.fhir.rest.gclient.ICriterion;
 import ca.uhn.fhir.rest.gclient.IParam;
 import ca.uhn.fhir.rest.gclient.IQuery;
 import ca.uhn.fhir.rest.gclient.TokenClientParam;
+import ca.uhn.fhir.rest.gclient.ReferenceClientParam;
+import ca.uhn.fhir.rest.param.DateRangeParam;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
@@ -80,13 +82,11 @@ public class BlueButtonClientImpl implements BlueButtonClient {
      * @throws ResourceNotFoundException when no such patient with the provided ID exists
      */
     @Override
-    public Patient requestPatientFromServer(String patientID) throws ResourceNotFoundException {
+    public Bundle requestPatientFromServer(String patientID, DateRangeParam lastUpdated) throws ResourceNotFoundException {
         logger.debug("Attempting to fetch patient ID {} from baseURL: {}", patientID, client.getServerBase());
-        return instrumentCall(REQUEST_PATIENT_METRIC, () -> client
-                .read()
-                .resource(Patient.class)
-                .withId(patientID)
-                .execute());
+        ICriterion<ReferenceClientParam> criterion = new ReferenceClientParam(Patient.SP_RES_ID).hasId(patientID);
+        return instrumentCall(REQUEST_EOB_METRIC, () ->
+                fetchBundle(Patient.class, criterion, patientID, lastUpdated));
     }
 
     /**
@@ -124,7 +124,7 @@ public class BlueButtonClientImpl implements BlueButtonClient {
      * @throws ResourceNotFoundException when the requested patient does not exist
      */
     @Override
-    public Bundle requestEOBFromServer(String patientID) {
+    public Bundle requestEOBFromServer(String patientID, DateRangeParam lastUpdated) {
         logger.debug("Attempting to fetch EOBs for patient ID {} from baseURL: {}", patientID, client.getServerBase());
 
         List<ICriterion<? extends IParam>> criteria = new ArrayList<ICriterion<? extends IParam>>();
@@ -134,7 +134,8 @@ public class BlueButtonClientImpl implements BlueButtonClient {
         return instrumentCall(REQUEST_EOB_METRIC, () ->
                 fetchBundle(ExplanationOfBenefit.class,
                         criteria,
-                        patientID));
+                        patientID,
+                        lastUpdated));
     }
 
     /**
@@ -155,14 +156,14 @@ public class BlueButtonClientImpl implements BlueButtonClient {
      * @throws ResourceNotFoundException when the requested patient does not exist
      */
     @Override
-    public Bundle requestCoverageFromServer(String patientID) throws ResourceNotFoundException {
+    public Bundle requestCoverageFromServer(String patientID, DateRangeParam lastUpdated) throws ResourceNotFoundException {
         logger.debug("Attempting to fetch Coverage for patient ID {} from baseURL: {}", patientID, client.getServerBase());
 
         List<ICriterion<? extends IParam>> criteria = new ArrayList<ICriterion<? extends IParam>>();
         criteria.add(Coverage.BENEFICIARY.hasId(formBeneficiaryID(patientID)));
 
         return instrumentCall(REQUEST_COVERAGE_METRIC, () ->
-                fetchBundle(Coverage.class, criteria, patientID));
+                fetchBundle(Coverage.class, criteria, patientID, lastUpdated));
     }
 
     @Override
@@ -207,11 +208,13 @@ public class BlueButtonClientImpl implements BlueButtonClient {
      * @param resourceClass - FHIR Resource class
      * @param criteria - For the resource class the correct criteria that match the patientID
      * @param patientID - id of patient
+     * @param lastUpdated - the lastUpdated date to search for
      * @return FHIR Bundle resource
      */
     private <T extends IBaseResource> Bundle fetchBundle(Class<T> resourceClass,
                                                          List<ICriterion<? extends IParam>> criteria,
-                                                         String patientID) {
+                                                         String patientID,
+                                                         DateRangeParam lastUpdated) {
         IQuery<IBaseBundle> query = client.search()
                 .forResource(resourceClass)
                 .where(criteria.remove(0));
@@ -220,12 +223,14 @@ public class BlueButtonClientImpl implements BlueButtonClient {
             query = query.and(criterion);
         }
 
-        final Bundle bundle = query.count(config.getResourcesCount())
+        final Bundle bundle = query
+                .lastUpdated(lastUpdated)
+                .count(config.getResourcesCount())
                 .returnBundle(Bundle.class)
                 .execute();
 
         // Case where patientID does not exist at all
-        if(!bundle.hasEntry()) {
+        if(!bundle.hasEntry() && lastUpdated == null) {
             throw new ResourceNotFoundException("No patient found with ID: " + patientID);
         }
         return bundle;

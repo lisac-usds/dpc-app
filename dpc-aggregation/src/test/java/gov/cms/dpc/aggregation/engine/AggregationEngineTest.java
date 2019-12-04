@@ -1,6 +1,7 @@
 package gov.cms.dpc.aggregation.engine;
 
 import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.rest.param.DateRangeParam;
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import com.codahale.metrics.MetricRegistry;
 import com.typesafe.config.ConfigFactory;
@@ -14,6 +15,7 @@ import gov.cms.dpc.queue.exceptions.JobQueueFailure;
 import gov.cms.dpc.queue.models.JobQueueBatch;
 import gov.cms.dpc.testing.BufferedLoggerHandler;
 import io.reactivex.disposables.Disposable;
+import org.hl7.fhir.dstu3.model.Bundle;
 import org.hl7.fhir.dstu3.model.Patient;
 import org.hl7.fhir.dstu3.model.ResourceType;
 import org.junit.Assert;
@@ -26,6 +28,8 @@ import org.mockito.Mockito;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -70,7 +74,7 @@ class AggregationEngineTest {
      */
     @Test
     void mockBlueButtonClientTest() {
-        Patient patient = bbclient.requestPatientFromServer(MockBlueButtonClient.TEST_PATIENT_IDS.get(0));
+        Bundle patient = bbclient.requestPatientFromServer(MockBlueButtonClient.TEST_PATIENT_IDS.get(0), null);
         assertNotNull(patient);
     }
 
@@ -110,7 +114,9 @@ class AggregationEngineTest {
                 orgID,
                 TEST_PROVIDER_ID,
                 Collections.singletonList(MockBlueButtonClient.TEST_PATIENT_IDS.get(0)),
-                Collections.singletonList(ResourceType.Patient)
+                Collections.singletonList(ResourceType.Patient),
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC)
         );
 
         // Work the batch
@@ -139,7 +145,9 @@ class AggregationEngineTest {
                 orgID,
                 TEST_PROVIDER_ID,
                 Collections.singletonList(MockBlueButtonClient.TEST_PATIENT_IDS.get(0)),
-                JobQueueBatch.validResourceTypes
+                JobQueueBatch.validResourceTypes,
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC)
         );
 
         // Work the batch
@@ -167,7 +175,9 @@ class AggregationEngineTest {
                 orgID,
                 TEST_PROVIDER_ID,
                 Arrays.asList("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"),
-                JobQueueBatch.validResourceTypes
+                JobQueueBatch.validResourceTypes,
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC)
         );
 
         // Assert the queue size
@@ -187,7 +197,9 @@ class AggregationEngineTest {
                 orgID,
                 TEST_PROVIDER_ID,
                 MockBlueButtonClient.TEST_PATIENT_IDS,
-                JobQueueBatch.validResourceTypes
+                JobQueueBatch.validResourceTypes,
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC)
         );
 
         // Work the batch
@@ -223,7 +235,9 @@ class AggregationEngineTest {
                 orgID,
                 TEST_PROVIDER_ID,
                 MockBlueButtonClient.TEST_PATIENT_IDS,
-                Collections.singletonList(ResourceType.Patient)
+                Arrays.asList(ResourceType.Patient),
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC)
         );
 
         // Work the batch
@@ -257,7 +271,9 @@ class AggregationEngineTest {
                 orgID,
                 TEST_PROVIDER_ID,
                 List.of(),
-                Collections.singletonList(ResourceType.Patient)
+                Collections.singletonList(ResourceType.Patient),
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC)
         );
 
         // Work the batch
@@ -287,7 +303,9 @@ class AggregationEngineTest {
                 orgID,
                 TEST_PROVIDER_ID,
                 MockBlueButtonClient.TEST_PATIENT_IDS,
-                Collections.singletonList(ResourceType.Schedule)
+                Collections.singletonList(ResourceType.Schedule),
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC)
         );
 
         // Work the batch
@@ -316,7 +334,9 @@ class AggregationEngineTest {
                 orgID,
                 TEST_PROVIDER_ID,
                 patientIDs,
-                List.of(ResourceType.ExplanationOfBenefit, ResourceType.Patient)
+                List.of(ResourceType.ExplanationOfBenefit, ResourceType.Patient),
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC)
         );
 
         // Work the batch
@@ -329,8 +349,9 @@ class AggregationEngineTest {
 
         // Check that the bad ID was called 3 times
         ArgumentCaptor<String> idCaptor = ArgumentCaptor.forClass(String.class);
-        Mockito.verify(bbclient, atLeastOnce()).requestPatientFromServer(idCaptor.capture());
-        Mockito.verify(bbclient, atLeastOnce()).requestEOBFromServer(idCaptor.capture());
+        ArgumentCaptor<DateRangeParam> lastUpdatedCaptor = ArgumentCaptor.forClass(DateRangeParam.class);
+        Mockito.verify(bbclient, atLeastOnce()).requestPatientFromServer(idCaptor.capture(), lastUpdatedCaptor.capture());
+        Mockito.verify(bbclient, atLeastOnce()).requestEOBFromServer(idCaptor.capture(), lastUpdatedCaptor.capture());
         var values = idCaptor.getAllValues();
         assertEquals(6,
                 values.stream().filter(value -> value.equals("-1")).count(),
@@ -359,7 +380,7 @@ class AggregationEngineTest {
     private void testWithThrowable(Throwable throwable) {
         Mockito.reset(bbclient);
         // Override throwing an error on fetching a patient
-        Mockito.doThrow(throwable).when(bbclient).requestPatientFromServer(Mockito.anyString());
+        Mockito.doThrow(throwable).when(bbclient).requestPatientFromServer(Mockito.anyString(), Mockito.any(DateRangeParam.class));
 
         final var orgID = UUID.randomUUID();
 
@@ -368,7 +389,9 @@ class AggregationEngineTest {
                 orgID,
                 TEST_PROVIDER_ID,
                 Collections.singletonList("1"),
-                Collections.singletonList(ResourceType.Patient)
+                Collections.singletonList(ResourceType.Patient),
+                null,
+                OffsetDateTime.now(ZoneOffset.UTC)
         );
 
         // Work the batch
@@ -381,7 +404,8 @@ class AggregationEngineTest {
 
         // Check that the bad ID was called 3 times
         ArgumentCaptor<String> idCaptor = ArgumentCaptor.forClass(String.class);
-        Mockito.verify(bbclient, atLeastOnce()).requestPatientFromServer(idCaptor.capture());
+        ArgumentCaptor<DateRangeParam> lastUpdatedCaptor = ArgumentCaptor.forClass(DateRangeParam.class);
+        Mockito.verify(bbclient, atLeastOnce()).requestPatientFromServer(idCaptor.capture(), lastUpdatedCaptor.capture());
         assertEquals(3, idCaptor.getAllValues().stream().filter(value -> value.equals("1")).count(), "Should have been called 3 times to get the patient, but with errors instead");
 
         // Look at the result. It should have one error, but be successful otherwise.

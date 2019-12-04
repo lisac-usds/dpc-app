@@ -9,6 +9,7 @@ import gov.cms.dpc.api.auth.AuthModule;
 import gov.cms.dpc.api.auth.OrganizationPrincipal;
 import gov.cms.dpc.api.cli.organizations.OrganizationCommand;
 import gov.cms.dpc.api.cli.tokens.TokenCommand;
+import gov.cms.dpc.bluebutton.BlueButtonClientModule;
 import gov.cms.dpc.common.hibernate.attribution.DPCHibernateBundle;
 import gov.cms.dpc.common.hibernate.attribution.DPCHibernateModule;
 import gov.cms.dpc.common.hibernate.auth.DPCAuthHibernateBundle;
@@ -93,7 +94,8 @@ public class DPCAPIService extends Application<DPCAPIConfiguration> {
                         new BakeryModule(),
                         new DPCAPIModule(hibernateAuthBundle),
                         new JobQueueModule<>(),
-                        new FHIRModule<>())
+                        new FHIRModule<>(),
+                        new BlueButtonClientModule<>())
                 .build();
     }
 

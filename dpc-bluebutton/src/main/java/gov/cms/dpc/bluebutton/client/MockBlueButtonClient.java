@@ -4,18 +4,18 @@ package gov.cms.dpc.bluebutton.client;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.context.PerformanceOptionsEnum;
 import ca.uhn.fhir.parser.IParser;
+import ca.uhn.fhir.rest.param.DateRangeParam;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.apache.http.client.utils.URLEncodedUtils;
 import org.hl7.fhir.dstu3.model.Bundle;
 import org.hl7.fhir.dstu3.model.CapabilityStatement;
-import org.hl7.fhir.dstu3.model.Patient;
-import org.hl7.fhir.instance.model.api.IBaseResource;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.Charset;
 import java.security.GeneralSecurityException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class MockBlueButtonClient implements BlueButtonClient {
@@ -35,25 +35,22 @@ public class MockBlueButtonClient implements BlueButtonClient {
     }
 
     @Override
-    public Patient requestPatientFromServer(String patientID) throws ResourceNotFoundException {
-        return loadOne(Patient.class, SAMPLE_PATIENT_PATH_PREFIX, patientID);
+    public Bundle requestPatientFromServer(String patientID, DateRangeParam lastUpdated) throws ResourceNotFoundException {
+        return loadBundle(SAMPLE_PATIENT_PATH_PREFIX, patientID);
     }
 
     @Override
     public Bundle requestPatientFromServerByMbiHash(String mbiHash) throws ResourceNotFoundException {
-        Patient patient = loadOne(Patient.class, SAMPLE_PATIENT_PATH_PREFIX, TEST_PATIENT_IDS.get(0));
-        Bundle bundle = new Bundle();
-        bundle.addEntry().setResource(patient);
-        return bundle;
+        return loadBundle(SAMPLE_PATIENT_PATH_PREFIX, TEST_PATIENT_IDS.get(0));
     }
 
     @Override
-    public Bundle requestEOBFromServer(String patientID) throws ResourceNotFoundException {
+    public Bundle requestEOBFromServer(String patientID, DateRangeParam lastUpdated) throws ResourceNotFoundException {
         return loadBundle(SAMPLE_EOB_PATH_PREFIX, patientID);
     }
 
     @Override
-    public Bundle requestCoverageFromServer(String patientID) throws ResourceNotFoundException {
+    public Bundle requestCoverageFromServer(String patientID, DateRangeParam lastUpdated) throws ResourceNotFoundException {
         return loadBundle(SAMPLE_COVERAGE_PATH_PREFIX, patientID);
     }
 
@@ -62,7 +59,7 @@ public class MockBlueButtonClient implements BlueButtonClient {
         // This is code is very specific to the bb-test-data directory and its contents
         final var nextLink = bundle.getLink(Bundle.LINK_NEXT).getUrl();
         final var nextUrl = URI.create(nextLink);
-        final var params = URLEncodedUtils.parse(nextUrl.getQuery(), Charset.forName("UTF-8"));
+        final var params = URLEncodedUtils.parse(nextUrl.getQuery(), StandardCharsets.UTF_8);
         final var patient = params.stream().filter(pair -> pair.getName().equals("patient")).findFirst().orElseThrow().getValue();
         final var startIndex = params.stream().filter(pair -> pair.getName().equals("startIndex")).findFirst().orElseThrow().getValue();
         var path = SAMPLE_EOB_PATH_PREFIX + patient + "_" + startIndex + ".xml";
@@ -77,7 +74,11 @@ public class MockBlueButtonClient implements BlueButtonClient {
     @Override
     public CapabilityStatement requestCapabilityStatement() throws ResourceNotFoundException {
         final var path = SAMPLE_METADATA_PATH_PREFIX + "meta.xml";
-        return loadOne(CapabilityStatement.class, path, null);
+        try(InputStream sampleData = loadResource(path, null)) {
+            return parser.parseResource(CapabilityStatement.class, sampleData);
+        } catch(IOException ex) {
+            throw formNoPatientException(null);
+        }
     }
 
     @Override
@@ -95,21 +96,6 @@ public class MockBlueButtonClient implements BlueButtonClient {
     private Bundle loadBundle(String pathPrefix, String patientID) {
         try(InputStream sampleData = loadResource(pathPrefix, patientID)) {
             return parser.parseResource(Bundle.class, sampleData);
-        } catch(IOException ex) {
-            throw formNoPatientException(patientID);
-        }
-    }
-
-    /**
-     * Read a FHIR Resource from the jar's resource file.
-     *
-     * @param resourceClass - FHIR Resource class
-     * @param pathPrefix - Path to the XML sample data
-     * @return FHIR Resource
-     */
-    private <T extends IBaseResource> T loadOne(Class<T> resourceClass, String pathPrefix, String patientID) {
-        try(InputStream sampleData = loadResource(pathPrefix, patientID)) {
-            return parser.parseResource(resourceClass, sampleData);
         } catch(IOException ex) {
             throw formNoPatientException(patientID);
         }

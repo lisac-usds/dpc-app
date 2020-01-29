@@ -3,7 +3,6 @@ package gov.cms.dpc.attribution.resources;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.gclient.IUpdateTyped;
-import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import gov.cms.dpc.attribution.AbstractAttributionTest;
@@ -38,7 +37,7 @@ class OrganizationResourceTest extends AbstractAttributionTest {
 
         // Create fake organization with missing data
         final Organization resource = new Organization();
-        resource.addIdentifier().setSystem(DPCIdentifierSystem.BENE_ID.getSystem()).setValue("test-mbi");
+        resource.addIdentifier().setSystem(DPCIdentifierSystem.MBI.getSystem()).setValue("test-mbi");
 
         final IGenericClient client = AttributionTestHelpers.createFHIRClient(ctx, getServerURL());
 
@@ -61,7 +60,7 @@ class OrganizationResourceTest extends AbstractAttributionTest {
 
         // Create fake organization with missing data
         final Organization resource = new Organization();
-        resource.addIdentifier().setSystem(DPCIdentifierSystem.MBI.getSystem()).setValue("test-mbi");
+        resource.addIdentifier().setSystem(DPCIdentifierSystem.MBI2.getSystem()).setValue("test-mbi");
 
         final IGenericClient client = AttributionTestHelpers.createFHIRClient(ctx, getServerURL());
 
@@ -197,7 +196,7 @@ class OrganizationResourceTest extends AbstractAttributionTest {
     private Patient createFakePatient(Organization organization) {
         final Patient patient = new Patient();
         patient.addName().setFamily("Test").addGiven("Patient");
-        patient.addIdentifier().setSystem(DPCIdentifierSystem.BENE_ID.getSystem()).setValue("test-fake-mbi");
+        patient.addIdentifier().setSystem(DPCIdentifierSystem.MBI.getSystem()).setValue("test-fake-mbi");
         patient.setBirthDate(Date.valueOf("1990-01-02"));
         patient.setGender(Enumerations.AdministrativeGender.MALE);
         patient.setManagingOrganization(new Reference(organization.getId()));

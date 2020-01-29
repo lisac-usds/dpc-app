@@ -60,7 +60,7 @@ class OrganizationResourceTest extends AbstractAttributionTest {
 
         // Create fake organization with missing data
         final Organization resource = new Organization();
-        resource.addIdentifier().setSystem(DPCIdentifierSystem.MBI2.getSystem()).setValue("test-mbi");
+        resource.addIdentifier().setSystem(DPCIdentifierSystem.MBI.getSystem()).setValue("test-mbi");
 
         final IGenericClient client = AttributionTestHelpers.createFHIRClient(ctx, getServerURL());
 

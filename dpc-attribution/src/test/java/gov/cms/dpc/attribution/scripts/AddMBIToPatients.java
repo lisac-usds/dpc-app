@@ -1,6 +1,7 @@
 package gov.cms.dpc.attribution.scripts;
 
 import ca.uhn.fhir.context.FhirContext;
+import gov.cms.dpc.fhir.DPCIdentifierSystem;
 import gov.cms.dpc.fhir.FHIRExtractors;
 import org.hl7.fhir.dstu3.model.Bundle;
 import org.hl7.fhir.dstu3.model.Patient;
@@ -14,11 +15,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
+import static gov.cms.dpc.fhir.FHIRExtractors.findMatchingIdentifier;
+
 /**
  * Helper script for adding MBI identifiers to patient rosters.
  * This is marked as {@link Disabled} because it's not actually a test, we put it here to prevent it from being pulled into the runtime JAR.
  */
-@Disabled
+//@Disabled
 public class AddMBIToPatients {
 
     static final String MBI_CSV = "prod_sbx_bene_ids.csv";
@@ -72,7 +75,7 @@ public class AddMBIToPatients {
                 .map(Bundle.BundleEntryComponent::getResource)
                 .map(resource -> (Patient) resource)
                 .forEach(patient -> {
-                    final String beneID = FHIRExtractors.getPatientMPI(patient);
+                    final String beneID = findBeneID(patient);
                     final PatientMBI mbi = patientMap.get(beneIDConverter.apply(beneID));
                     assert !(mbi == null);
                     patient.addIdentifier().setSystem("http://hl7.org/fhir/sid/us-mbi").setValue(mbi.mbi);
@@ -80,6 +83,10 @@ public class AddMBIToPatients {
                 });
 
         return bundle;
+    }
+
+    private static String findBeneID(Patient patient) {
+        return findMatchingIdentifier(patient.getIdentifier(), DPCIdentifierSystem.BENE_ID).getValue();
     }
 
     private static class PatientMBI {

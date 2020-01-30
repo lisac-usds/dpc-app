@@ -40,9 +40,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class BlueButtonClientTest {
     // A random example patient (Jane Doe)
     private static final String TEST_PATIENT_ID = "20140000008325";
-    private static final String TEST_PATIENT_MBI_HASH = "abadf57ff8dc94610ca0d479feadb1743c9cd3c77caf1eafde5719a154379fb6";
+    private static final String TEST_PATIENT_MBI = "2SW4N00AA00";
+    private static final String TEST_PATIENT_MBI_HASH = "6a288931dd0a911809e977093b1257e344fb29df3f5eacb622aadade8adcc581";
     // A patient that only has a single EOB record in bluebutton
     private static final String TEST_SINGLE_EOB_PATIENT_ID = "20140000009893";
+    private static final String TEST_SINGLE_EOB_MBI = "4SP0P00AA00";
+    private static final String TEST_SINGLE_EOB_MBI_HASH = "e015506295a98f56e91690176fb41342dc5276a1d122e59594caa5a0fd649ac9";
     // A patient id that should not exist in bluebutton
     private static final String TEST_NONEXISTENT_PATIENT_ID = "31337";
 
@@ -95,6 +98,13 @@ class BlueButtonClientTest {
                 HttpStatus.OK_200,
                 getRawXML(SAMPLE_PATIENT_PATH_PREFIX + TEST_PATIENT_ID + "-bundle.xml"),
                 Collections.singletonList(Parameter.param("identifier", DPCIdentifierSystem.MBI_HASH.getSystem() + "|" + TEST_PATIENT_MBI_HASH))
+        );
+
+        createMockServerExpectation(
+                "/v1/fhir/Patient",
+                HttpStatus.OK_200,
+                getRawXML(SAMPLE_PATIENT_PATH_PREFIX + TEST_SINGLE_EOB_PATIENT_ID + "-bundle.xml"),
+                Collections.singletonList(Parameter.param("identifier", DPCIdentifierSystem.MBI_HASH.getSystem() + "|" + TEST_SINGLE_EOB_MBI_HASH))
         );
 
         // Create mocks for pages of the results
@@ -150,7 +160,7 @@ class BlueButtonClientTest {
 
     @Test
     void shouldGetEOBFromPatientID() {
-        Bundle response = bbc.requestEOBFromServer(TEST_PATIENT_ID);
+        Bundle response = bbc.requestEOBFromServer(TEST_PATIENT_MBI);
 
         assertNotNull(response, "The demo patient should have a non-null EOB bundle");
         assertEquals(32, response.getTotal(), "The demo patient should have exactly 32 EOBs");
@@ -158,7 +168,7 @@ class BlueButtonClientTest {
 
     @Test
     void shouldNotHaveNextBundle() {
-        Bundle response = bbc.requestEOBFromServer(TEST_SINGLE_EOB_PATIENT_ID);
+        Bundle response = bbc.requestEOBFromServer(TEST_SINGLE_EOB_MBI);
 
         assertNotNull(response, "The demo patient should have a non-null EOB bundle");
         assertEquals(1, response.getTotal(), "The demo patient should have exactly 1 EOBs");
@@ -167,7 +177,7 @@ class BlueButtonClientTest {
 
     @Test
     void shouldHaveNextBundle() {
-        Bundle response = bbc.requestEOBFromServer(TEST_PATIENT_ID);
+        Bundle response = bbc.requestEOBFromServer(TEST_PATIENT_MBI);
 
         assertNotNull(response, "The demo patient should have a non-null EOB bundle");
         assertNotNull(response.getLink(Bundle.LINK_NEXT), "Should have no next link since all the resources are in the bundle");
@@ -178,7 +188,7 @@ class BlueButtonClientTest {
 
     @Test
     void shouldReturnBundleContainingOnlyEOBs() {
-        Bundle response = bbc.requestEOBFromServer(TEST_PATIENT_ID);
+        Bundle response = bbc.requestEOBFromServer(TEST_PATIENT_MBI);
 
         response.getEntry().forEach((entry) -> assertEquals(
                 entry.getResource().getResourceType(),
@@ -189,7 +199,7 @@ class BlueButtonClientTest {
 
     @Test
     void shouldGetCoverageFromPatientID() {
-        final Bundle response = bbc.requestCoverageFromServer(TEST_PATIENT_ID);
+        final Bundle response = bbc.requestCoverageFromServer(TEST_PATIENT_MBI);
 
         assertNotNull(response, "The demo patient should have a non-null Coverage bundle");
         assertEquals(3, response.getTotal(), "The demo patient should have exactly 3 Coverage");
@@ -206,7 +216,7 @@ class BlueButtonClientTest {
 
     @Test
     void shouldHandlePatientsWithOnlyOneEOB() {
-        final Bundle response = bbc.requestEOBFromServer(TEST_SINGLE_EOB_PATIENT_ID);
+        final Bundle response = bbc.requestEOBFromServer(TEST_SINGLE_EOB_MBI);
         assertEquals(1, response.getTotal(), "This demo patient should have exactly 1 EOB");
     }
 

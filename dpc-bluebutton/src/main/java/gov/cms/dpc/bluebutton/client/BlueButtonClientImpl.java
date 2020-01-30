@@ -26,7 +26,9 @@ import javax.crypto.spec.PBEKeySpec;
 import java.security.GeneralSecurityException;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.KeySpec;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 
 
@@ -45,9 +47,9 @@ public class BlueButtonClientImpl implements BlueButtonClient {
     private BBClientConfiguration config;
     private Map<String, Timer> timers;
     private Map<String, Meter> exceptionMeters;
-    private SecretKeyFactory secretKeyFactory = null;
     private byte[] bfdHashPepper;
     private int bfdHashIter;
+    private static final String HASH_ALGORITHM = "PBKDF2WithHmacSHA256";
 
     private static String formBeneficiaryID(String fromPatientID) {
         return "Patient/" + fromPatientID;
@@ -60,25 +62,12 @@ public class BlueButtonClientImpl implements BlueButtonClient {
         this.exceptionMeters = metricMaker.registerMeters(REQUEST_METRICS);
         this.timers = metricMaker.registerTimers(REQUEST_METRICS);
 
-        String alg = "PBKDF2WithHmacSHA256";
-        try {
-            this.secretKeyFactory = SecretKeyFactory.getInstance(alg);
-            bfdHashIter = config.getBfdHashIter();
-            if (config.getBfdHashPepper() != null) {
-                bfdHashPepper = Hex.decode(config.getBfdHashPepper());
-            }
-        } catch (NoSuchAlgorithmException e) {
-            logger.error("Secret key factory could not be created due to invalid algorithm: {}", alg);
+        bfdHashIter = config.getBfdHashIter();
+        if (config.getBfdHashPepper() != null) {
+            bfdHashPepper = Hex.decode(config.getBfdHashPepper());
         }
     }
 
-    /**
-     * Queries Blue Button server for patient data
-     *
-     * @param patientID The requested patient's ID
-     * @return {@link Patient} A FHIR Patient resource
-     * @throws ResourceNotFoundException when no such patient with the provided ID exists
-     */
     @Override
     public Patient requestPatientFromServer(String patientID) throws ResourceNotFoundException {
         logger.debug("Attempting to fetch patient ID {} from baseURL: {}", patientID, client.getServerBase());
@@ -106,28 +95,34 @@ public class BlueButtonClientImpl implements BlueButtonClient {
                 .execute());
     }
 
-    /**
-     * Queries Blue Button server for Explanations of Benefit associated with a given patient
-     *
-     * There are two edge cases to consider when pulling EoB data given a patientID:
-     *  1. No patient with the given ID exists: if this is the case, BlueButton should return a Bundle with no
-     *  entry, i.e. ret.hasEntry() will evaluate to false. For this case, the method will throw a
-     *  {@link ResourceNotFoundException}
-     *
-     *  2. A patient with the given ID exists, but has no associated EoB records: if this is the case, BlueButton should
-     *  return a Bundle with an entry of size 0, i.e. ret.getEntry().size() == 0. For this case, the method simply
-     *  returns the Bundle it received from BlueButton to the caller, and the caller is responsible for handling Bundles
-     *  that contain no EoBs.
-     *
-     * @param patientID The requested patient's ID
-     * @return {@link Bundle} Containing a number (possibly 0) of {@link ExplanationOfBenefit} objects
-     * @throws ResourceNotFoundException when the requested patient does not exist
-     */
     @Override
-    public Bundle requestEOBFromServer(String patientID) {
-        logger.debug("Attempting to fetch EOBs for patient ID {} from baseURL: {}", patientID, client.getServerBase());
+    public Patient requestPatientByMbi(String mbi) throws ResourceNotFoundException {
+        logger.debug("Attempting to fetch patient with MBI {} from baseURL: {}", mbi, client.getServerBase());
+        try {
+            final Bundle patientBundle = requestPatientFromServerByMbiHash(hashMbi(mbi));
+            if (patientBundle.getTotal() == 0) {
+                final IdType idType = new IdType(DPCIdentifierSystem.MBI.getSystem(), mbi);
+                throw new ResourceNotFoundException(idType);
+            }
+            if (patientBundle.getTotal() > 1) {
+                logger.error("MULTIPLE PATIENTS MATCH MBI: {}", mbi);
+                final IdType idType = new IdType(DPCIdentifierSystem.MBI.getSystem(), mbi);
+                throw new ResourceNotFoundException(idType);
+            }
+            return (Patient) patientBundle.getEntryFirstRep().getResource();
+        } catch (GeneralSecurityException e) {
+            logger.error("Unable to hash MBI.", e);
+            throw new RuntimeException(e);
+        }
+    }
 
-        List<ICriterion<? extends IParam>> criteria = new ArrayList<ICriterion<? extends IParam>>();
+
+    @Override
+    public Bundle requestEOBFromServer(String mbi) {
+        logger.debug("Attempting to fetch EOBs for patient with MBI {} from baseURL: {}", mbi, client.getServerBase());
+        final Patient patient = requestPatientByMbi(mbi);
+        List<ICriterion<? extends IParam>> criteria = new ArrayList<>();
+        final String patientID = patient.getIdElement().getIdPart();
         criteria.add(ExplanationOfBenefit.PATIENT.hasId(patientID));
         criteria.add(new TokenClientParam("excludeSAMHSA").exactly().code("true"));
 
@@ -137,28 +132,13 @@ public class BlueButtonClientImpl implements BlueButtonClient {
                         patientID));
     }
 
-    /**
-     * Queries Blue Button server for Coverage associated with a given patient
-     *
-     * Like for the EOB resource, there are two edge cases to consider when pulling coverage data given a patientID:
-     *  1. No patient with the given ID exists: if this is the case, BlueButton should return a Bundle with no
-     *  entry, i.e. ret.hasEntry() will evaluate to false. For this case, the method will throw a
-     *  {@link ResourceNotFoundException}
-     *
-     *  2. A patient with the given ID exists, but has no associated Coverage records: if this is the case, BlueButton should
-     *  return a Bundle with an entry of size 0, i.e. ret.getEntry().size() == 0. For this case, the method simply
-     *  returns the Bundle it received from BlueButton to the caller, and the caller is responsible for handling Bundles
-     *  that contain no coverage records.
-     *
-     * @param patientID The requested patient's ID
-     * @return {@link Bundle} Containing a number (possibly 0) of {@link ExplanationOfBenefit} objects
-     * @throws ResourceNotFoundException when the requested patient does not exist
-     */
     @Override
-    public Bundle requestCoverageFromServer(String patientID) throws ResourceNotFoundException {
-        logger.debug("Attempting to fetch Coverage for patient ID {} from baseURL: {}", patientID, client.getServerBase());
+    public Bundle requestCoverageFromServer(String mbi) throws ResourceNotFoundException {
+        logger.debug("Attempting to fetch Coverage for patient with MBI {} from baseURL: {}", mbi, client.getServerBase());
 
-        List<ICriterion<? extends IParam>> criteria = new ArrayList<ICriterion<? extends IParam>>();
+        final Patient patient = requestPatientByMbi(mbi);
+        List<ICriterion<? extends IParam>> criteria = new ArrayList<>();
+        final String patientID = patient.getIdElement().getIdPart();
         criteria.add(Coverage.BENEFICIARY.hasId(formBeneficiaryID(patientID)));
 
         return instrumentCall(REQUEST_COVERAGE_METRIC, () ->
@@ -180,9 +160,9 @@ public class BlueButtonClientImpl implements BlueButtonClient {
     @Override
     public CapabilityStatement requestCapabilityStatement() throws ResourceNotFoundException {
         return instrumentCall(REQUEST_CAPABILITIES_METRIC, () -> client
-                        .capabilities()
-                        .ofType(CapabilityStatement.class)
-                        .execute());
+                .capabilities()
+                .ofType(CapabilityStatement.class)
+                .execute());
     }
 
     @Override
@@ -192,12 +172,16 @@ public class BlueButtonClientImpl implements BlueButtonClient {
             return "";
         }
 
-        if (secretKeyFactory == null) {
-            throw new GeneralSecurityException("Secret key factory is null");
+        final SecretKeyFactory instance;
+        try {
+            instance = SecretKeyFactory.getInstance(HASH_ALGORITHM);
+        } catch (NoSuchAlgorithmException e) {
+            logger.error("Secret key factory could not be created due to invalid algorithm: {}", HASH_ALGORITHM);
+            throw new GeneralSecurityException(e);
         }
 
         KeySpec keySpec = new PBEKeySpec(mbi.toCharArray(), bfdHashPepper, bfdHashIter, 256);
-        SecretKey secretKey = secretKeyFactory.generateSecret(keySpec);
+        SecretKey secretKey = instance.generateSecret(keySpec);
         return Hex.toHexString(secretKey.getEncoded());
     }
 
@@ -205,8 +189,8 @@ public class BlueButtonClientImpl implements BlueButtonClient {
      * Read a FHIR Bundle from BlueButton. Limits the returned size by resourcesPerRequest.
      *
      * @param resourceClass - FHIR Resource class
-     * @param criteria - For the resource class the correct criteria that match the patientID
-     * @param patientID - id of patient
+     * @param criteria      - For the resource class the correct criteria that match the patientID
+     * @param patientID     - id of patient
      * @return FHIR Bundle resource
      */
     private <T extends IBaseResource> Bundle fetchBundle(Class<T> resourceClass,
@@ -225,8 +209,8 @@ public class BlueButtonClientImpl implements BlueButtonClient {
                 .execute();
 
         // Case where patientID does not exist at all
-        if(!bundle.hasEntry()) {
-            throw new ResourceNotFoundException("No patient found with ID: " + patientID);
+        if (!bundle.hasEntry()) {
+            throw new ResourceNotFoundException("No patient found with MBI: " + patientID);
         }
         return bundle;
     }
@@ -235,15 +219,15 @@ public class BlueButtonClientImpl implements BlueButtonClient {
      * Instrument a call to Blue Button.
      *
      * @param metricName - The name of the method
-     * @param supplier - the call as lambda to instrumented
-     * @param <T> - the type returned by the call
+     * @param supplier   - the call as lambda to instrumented
+     * @param <T>        - the type returned by the call
      * @return the value returned by the supplier (i.e. call)
      */
     private <T> T instrumentCall(String metricName, Supplier<T> supplier) {
         final var timerContext = timers.get(metricName).time();
         try {
             return supplier.get();
-        } catch(Exception ex) {
+        } catch (Exception ex) {
             final var exceptionMeter = exceptionMeters.get(metricName);
             exceptionMeter.mark();
             throw ex;

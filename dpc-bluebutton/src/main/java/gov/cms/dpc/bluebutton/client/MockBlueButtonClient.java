@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.List;
 
@@ -48,6 +49,11 @@ public class MockBlueButtonClient implements BlueButtonClient {
     }
 
     @Override
+    public Patient requestPatientByMbi(String mbi) throws ResourceNotFoundException {
+        throw new UnsupportedOperationException("Not supported yet!");
+    }
+
+    @Override
     public Bundle requestEOBFromServer(String patientID) throws ResourceNotFoundException {
         return loadBundle(SAMPLE_EOB_PATH_PREFIX, patientID);
     }
@@ -62,7 +68,7 @@ public class MockBlueButtonClient implements BlueButtonClient {
         // This is code is very specific to the bb-test-data directory and its contents
         final var nextLink = bundle.getLink(Bundle.LINK_NEXT).getUrl();
         final var nextUrl = URI.create(nextLink);
-        final var params = URLEncodedUtils.parse(nextUrl.getQuery(), Charset.forName("UTF-8"));
+        final var params = URLEncodedUtils.parse(nextUrl.getQuery(), StandardCharsets.UTF_8);
         final var patient = params.stream().filter(pair -> pair.getName().equals("patient")).findFirst().orElseThrow().getValue();
         final var startIndex = params.stream().filter(pair -> pair.getName().equals("startIndex")).findFirst().orElseThrow().getValue();
         var path = SAMPLE_EOB_PATH_PREFIX + patient + "_" + startIndex + ".xml";
@@ -81,7 +87,7 @@ public class MockBlueButtonClient implements BlueButtonClient {
     }
 
     @Override
-    public String hashMbi(String mbi) throws GeneralSecurityException {
+    public String hashMbi(String mbi) {
         return "";
     }
 

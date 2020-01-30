@@ -120,17 +120,17 @@ class ResourceFetcher {
     /**
      * Based on resourceType, fetch a resource or a bundle of resources.
      *
-     * @param patientID of the resource to fetch
+     * @param patientMBI of the resource to fetch
      * @return either a single resource or the first bundle of resources
      */
-    private Resource fetchFirst(String patientID) {
+    private Resource fetchFirst(String patientMBI) {
         switch (resourceType) {
             case Patient:
-                return blueButtonClient.requestPatientFromServer(patientID);
+                return blueButtonClient.requestPatientByMbi(patientMBI);
             case ExplanationOfBenefit:
-                return blueButtonClient.requestEOBFromServer(patientID);
+                return blueButtonClient.requestEOBFromServer(patientMBI);
             case Coverage:
-                return blueButtonClient.requestCoverageFromServer(patientID);
+                return blueButtonClient.requestCoverageFromServer(patientMBI);
             default:
                 throw new JobQueueFailure(jobID, batchID, "Unexpected resource type: " + resourceType.toString());
         }

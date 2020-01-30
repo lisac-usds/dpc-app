@@ -109,7 +109,7 @@ class AggregationEngineTest {
         final var jobID = queue.createJob(
                 orgID,
                 TEST_PROVIDER_ID,
-                Collections.singletonList(MockBlueButtonClient.TEST_PATIENT_IDS.get(0)),
+                Collections.singletonList(MockBlueButtonClient.TEST_PATIENT_MBIS.get(0)),
                 Collections.singletonList(ResourceType.Patient)
         );
 
@@ -138,7 +138,7 @@ class AggregationEngineTest {
         final var jobID = queue.createJob(
                 orgID,
                 TEST_PROVIDER_ID,
-                Collections.singletonList(MockBlueButtonClient.TEST_PATIENT_IDS.get(0)),
+                Collections.singletonList(MockBlueButtonClient.TEST_PATIENT_MBIS.get(0)),
                 JobQueueBatch.validResourceTypes
         );
 
@@ -186,7 +186,7 @@ class AggregationEngineTest {
         final var jobID = queue.createJob(
                 orgID,
                 TEST_PROVIDER_ID,
-                MockBlueButtonClient.TEST_PATIENT_IDS,
+                MockBlueButtonClient.TEST_PATIENT_MBIS,
                 JobQueueBatch.validResourceTypes
         );
 
@@ -222,7 +222,7 @@ class AggregationEngineTest {
         final var jobID = queue.createJob(
                 orgID,
                 TEST_PROVIDER_ID,
-                MockBlueButtonClient.TEST_PATIENT_IDS,
+                MockBlueButtonClient.TEST_PATIENT_MBIS,
                 Collections.singletonList(ResourceType.Patient)
         );
 
@@ -239,7 +239,7 @@ class AggregationEngineTest {
         assertTrue(Files.exists(Path.of(outputFilePath)));
         try {
             final String fileContents = Files.readString(Path.of(outputFilePath));
-            assertEquals(MockBlueButtonClient.TEST_PATIENT_IDS.size(), Arrays.stream(fileContents.split("\n")).count(), "Contains multiple patients in file output");
+            assertEquals(MockBlueButtonClient.TEST_PATIENT_MBIS.size(), Arrays.stream(fileContents.split("\n")).count(), "Contains multiple patients in file output");
         } catch ( Exception e ) {
             Assert.fail("Failed to read output file");
         }
@@ -286,7 +286,7 @@ class AggregationEngineTest {
         final var jobID = queue.createJob(
                 orgID,
                 TEST_PROVIDER_ID,
-                MockBlueButtonClient.TEST_PATIENT_IDS,
+                MockBlueButtonClient.TEST_PATIENT_MBIS,
                 Collections.singletonList(ResourceType.Schedule)
         );
 
@@ -304,7 +304,7 @@ class AggregationEngineTest {
      */
     @Test
     void badPatientIDTest() {
-        final List<String> patientIDs = new ArrayList<>(MockBlueButtonClient.TEST_PATIENT_IDS);
+        final List<String> patientIDs = new ArrayList<>(MockBlueButtonClient.TEST_PATIENT_MBIS);
         // Add bad patient ID
         patientIDs.add("-1");
         assertEquals(3, patientIDs.size());
@@ -381,7 +381,7 @@ class AggregationEngineTest {
 
         // Check that the bad ID was called 3 times
         ArgumentCaptor<String> idCaptor = ArgumentCaptor.forClass(String.class);
-        Mockito.verify(bbclient, atLeastOnce()).requestPatientFromServer(idCaptor.capture());
+        Mockito.verify(bbclient, atLeastOnce()).requestPatientByMbi(idCaptor.capture());
         assertEquals(3, idCaptor.getAllValues().stream().filter(value -> value.equals("1")).count(), "Should have been called 3 times to get the patient, but with errors instead");
 
         // Look at the result. It should have one error, but be successful otherwise.

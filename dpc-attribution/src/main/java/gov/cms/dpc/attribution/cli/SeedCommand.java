@@ -41,10 +41,10 @@ import java.util.*;
 public class SeedCommand extends EnvironmentCommand<DPCAttributionConfiguration> {
 
     private static Logger logger = LoggerFactory.getLogger(SeedCommand.class);
-    private static final String CSV = "test_associations.csv";
+    private static final String CSV = "test_associations-dpr.csv";
     private static final String ORGANIZATION_BUNDLE = "organization_bundle.json";
     private static final String PROVIDER_BUNDLE = "provider_bundle.json";
-    private static final String PATIENT_BUNDLE = "patient_bundle.json";
+    private static final String PATIENT_BUNDLE = "patient_bundle-dpr.json";
     private static final UUID ORGANIZATION_ID = UUID.fromString("46ac7ad6-7487-4dd0-baa0-6e2c8cae76a0");
 
     private final Settings settings;

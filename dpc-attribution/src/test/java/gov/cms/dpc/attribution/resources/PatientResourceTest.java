@@ -169,7 +169,7 @@ class PatientResourceTest extends AbstractAttributionTest {
         final IQuery<Bundle> firstQuery = client
                 .search()
                 .forResource(Patient.class)
-                .where(Patient.IDENTIFIER.exactly().systemAndCode(DPCIdentifierSystem.BENE_ID.getSystem(), "19990000002902"))
+                .where(Patient.IDENTIFIER.exactly().systemAndCode(DPCIdentifierSystem.BENE_ID.getSystem(), DEFAULT_PATIENT_MBI_2))
                 .and(Patient.ORGANIZATION.hasId("Organization/" + DEFAULT_ORG_ID))
                 .returnBundle(Bundle.class)
                 .encodedJson();

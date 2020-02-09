@@ -13,9 +13,13 @@ import org.hl7.fhir.dstu3.model.CapabilityStatement;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.nio.charset.Charset;
 import java.security.GeneralSecurityException;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
 import java.util.List;
 
 public class MockBlueButtonClient implements BlueButtonClient {
@@ -26,6 +30,7 @@ public class MockBlueButtonClient implements BlueButtonClient {
     private static final String SAMPLE_METADATA_PATH_PREFIX = "bb-test-data/";
     public static final List<String> TEST_PATIENT_IDS = List.of("20140000008325", "20140000009893");
     public static final List<String> TEST_PATIENT_WITH_BAD_IDS = List.of("-1", "-2", "20140000008325",  "20140000009893", "-3");
+    public static final OffsetDateTime BFD_TRANSACTION_TIME = OffsetDateTime.ofInstant(Instant.now().truncatedTo(ChronoUnit.MILLIS), ZoneOffset.UTC);
 
     private final IParser parser;
 
@@ -65,7 +70,9 @@ public class MockBlueButtonClient implements BlueButtonClient {
         var path = SAMPLE_EOB_PATH_PREFIX + patient + "_" + startIndex + ".xml";
 
         try(InputStream sampleData = MockBlueButtonClient.class.getClassLoader().getResourceAsStream(path)) {
-            return parser.parseResource(Bundle.class, sampleData);
+            final var nextBundle = parser.parseResource(Bundle.class, sampleData);
+            nextBundle.getMeta().setLastUpdated(Date.from(BFD_TRANSACTION_TIME.toInstant()));
+            return nextBundle;
         } catch(IOException ex) {
             throw new ResourceNotFoundException("Missing next bundle");
         }
@@ -95,7 +102,9 @@ public class MockBlueButtonClient implements BlueButtonClient {
      */
     private Bundle loadBundle(String pathPrefix, String patientID) {
         try(InputStream sampleData = loadResource(pathPrefix, patientID)) {
-            return parser.parseResource(Bundle.class, sampleData);
+            final var bundle = parser.parseResource(Bundle.class, sampleData);
+            bundle.getMeta().setLastUpdated(Date.from(BFD_TRANSACTION_TIME.toInstant()));
+            return bundle;
         } catch(IOException ex) {
             throw formNoPatientException(patientID);
         }
